@@ -2,3 +2,4 @@ venv/
 *.pt
 carla_dataset/
 *.mp4
+core/__pycache__/
