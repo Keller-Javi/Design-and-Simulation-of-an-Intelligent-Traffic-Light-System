@@ -56,7 +56,7 @@ def delete_vehicles(actor_list, target_location):
     vehicles_to_delete = [
         actor for actor in actor_list 
         if actor and actor.is_alive and 'vehicle.' in actor.type_id 
-        and target_location.distance(actor.get_location()) > 115.0
+        and target_location.distance(actor.get_location()) > 105.0
     ]
 
     for actor in actor_list:

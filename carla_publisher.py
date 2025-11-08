@@ -2,10 +2,13 @@
 import carla
 import queue
 import numpy as np
+import sys
 
 from core.spawn_utils import spawn_vehicles, spawn_pedestrians, delete_vehicles
 from core.zmq_publisher import ZMQPublisher
 from core.setup_world import SetupWorld
+from core.setup_camera import add_camera_to_traffic_light
+from core.dynamic_weather import Weather
 
 def main():
     # --- Configuración de ZeroMQ ---
@@ -27,13 +30,23 @@ def main():
         settings = world.get_settings()
         settings.synchronous_mode = True
         settings.fixed_delta_seconds = 0.05
+        settings.max_substep_delta_time = 0.05     # Asegura estabilidad del paso de física
+        settings.max_substeps = 1
         world.apply_settings(settings)
 
         blueprint_library = world.get_blueprint_library()
 
+        # --- CONFIGURAR EL CLIMA DINÁMICO ---
+        weather = Weather(world.get_weather())
+        speed_factor = 1.0
+        update_freq = 0.1 / speed_factor
+
+        elapsed_time = 0.0
+
         # --- GENERAR TRÁFICO ---
         traffic_manager = client.get_trafficmanager(8000)
         traffic_manager.set_synchronous_mode(True)
+        #traffic_manager.set_hybrid_physics_mode(True)
 
         # Limitar la zana de spawn de vehículos
         spawn_points = world.get_map().get_spawn_points()
@@ -48,58 +61,63 @@ def main():
 
         # Generate vehicles
         number_of_vehicles = 50
+
+        # No queremos que ciertos vehículos aparezcan
+        vehicles_to_not_spawn = ["vehicle.micro.microlino", "vehicle.tesla.cybertruck", "vehicle.bh.crossbike", "vehicle.diamondback.century", "vehicle.gazelle.omafiets"]
         blueprints = blueprint_library.filter('vehicle.*')
+        blueprints = [bp for bp in blueprints if bp.id not in vehicles_to_not_spawn]
         
         actor_list = spawn_vehicles(world, blueprints, nearby_spawns, number_of_vehicles, actor_list)
 
         nearby_spawns = [
             sp for sp in spawn_points 
-            if sp.location.distance(target_location_1) > 45.0
-            and sp.location.distance(target_location_1) < 90.0
+            if sp.location.distance(target_location_1) > 40.0
+            and sp.location.distance(target_location_1) < 80.0
         ]
 
         # Generate pedestrians
-        number_of_pedestrians = 50
+        number_of_pedestrians = 75
+
         actor_list = spawn_pedestrians(world, client, number_of_pedestrians, actor_list)
 
-        # --- 2. SELECCIONAR UN SEMÁFORO ESPECÍFICO POR UBICACIÓN --- TODO: POSIBLEMNETE NO ES NECESARIO ESTO
-        all_traffic_lights = world.get_actors().filter('*.traffic_light')
-        target_traffic_light = None
-        
-        min_distance = float('inf')
-        for light in all_traffic_lights:
-            distance = light.get_location().distance(target_location_1)
-            if distance < min_distance:
-                min_distance = distance
-                target_traffic_light = light
-        
-        if not target_traffic_light:
-            print("Error: No se pudo encontrar un semáforo cerca de la ubicación objetivo.")
-            return
-        
-        print(f"Semáforo específico seleccionado: ID {target_traffic_light.id} en {target_traffic_light.get_location()}")
+        # --- 2. SELECCIONAR UN SEMÁFORO ESPECÍFICO POR UBICACIÓN
 
-        # --- 3. CONFIGURAR LA CÁMARA DEL SEMÁFORO ---
-        camera_bp = blueprint_library.find('sensor.camera.rgb')
-        camera_bp.set_attribute('image_size_x', '800')
-        camera_bp.set_attribute('image_size_y', '600')
-        
-        camera_transform = carla.Transform(carla.Location(x=-4,z=4.5), carla.Rotation(pitch=-18.22, yaw=90.85, roll=0.00))
-        camera = world.spawn_actor(camera_bp, camera_transform, attach_to=target_traffic_light)
+        camera, image_queue = add_camera_to_traffic_light(world, blueprint_library, target_location_1)
         actor_list.append(camera)
-
-        image_queue = queue.Queue()
-        camera.listen(image_queue.put)
 
         # --- 4. BUCLE PRINCIPAL MAESTRO ---
         while True:
             world.tick()
 
+            # --- Actualizar clima dinámico ---
+            world_snapshot = world.get_snapshot()
+            timestamp = world_snapshot.timestamp
+            elapsed_time += timestamp.delta_seconds
+            if elapsed_time > update_freq:
+                weather.tick(speed_factor * elapsed_time)
+                world.set_weather(weather.weather)
+                sys.stdout.write('\r' + str(weather) + 12 * ' ')
+                sys.stdout.flush()
+                elapsed_time = 0.0
+
+            # --- Determinar hora simulada y tránsito dinámico ---
+            current_hour = weather.current_hour()
+            
+            # Determinar cantidad de vehículos según hora
+            if 7 <= current_hour < 9 or 11 <= current_hour < 13 or 16 <= current_hour < 18:
+                number_of_vehicles = 50  # Tránsito alto
+            elif 6 <= current_hour < 22:
+                number_of_vehicles = 25  # Tránsito moderado
+            else:
+                number_of_vehicles = 10  # Tránsito bajo
+            
+            # --- Gestionar vehículos dinámicamente ---
             # Eliminar vehículos lejanos al semáforo
             actor_list = delete_vehicles(actor_list, target_location_1)
             # Generar nuevos vehículos si es necesario
             actor_list = spawn_vehicles(world, blueprints, nearby_spawns, number_of_vehicles, actor_list)
             
+            # --- PUBLICAR DATOS A TRAVÉS DE ZEROMQ ---
             # Enviar imagen de la cámara
             try:
                 image = image_queue.get(block=False)
@@ -113,8 +131,13 @@ def main():
 
     finally:
         print("\nLimpiando y restaurando la configuración...")
-        world.apply_settings(original_settings)
-        client.apply_batch([carla.command.DestroyActor(x) for x in actor_list])
+
+        if 'world' in locals() and 'original_settings' in locals():
+            world.apply_settings(original_settings)
+        if 'client' in locals() and 'actor_list' in locals():
+            actors_to_destroy = [x for x in actor_list if x and x.is_alive]
+            client.apply_batch([carla.command.DestroyActor(x) for x in actors_to_destroy])
+        
         zmq_publisher.close()
 
 if __name__ == '__main__':
