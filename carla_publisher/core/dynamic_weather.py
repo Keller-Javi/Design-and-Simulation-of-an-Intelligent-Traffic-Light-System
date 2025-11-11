@@ -70,9 +70,9 @@ class Weather(object):
         self.weather.sun_altitude_angle = self._sun.altitude
 
     def __str__(self):
-        return '%s %s' % (self._sun, self._storm)
+        return '%s %s Hour: %.0f:00' % (self._sun, self._storm, self.current_hour())
     
     def current_hour(self):
-        normalized = (self._sun.altitude + 90) / 180  # rango [0, 1]
-        hour = normalized * 24  # rango [0, 24]
+        # Desfase para que 0 altitud = 6:00 am
+        hour = ((self._sun._t + math.pi / 2) % (2 * math.pi)) / (2 * math.pi) * 24.0
         return hour

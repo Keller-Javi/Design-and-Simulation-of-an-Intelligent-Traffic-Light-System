@@ -1,9 +1,7 @@
 # opencv_recorder.py
 
 import cv2
-import numpy as np
 import zmq
-import time
 from datetime import datetime
 
 def main():

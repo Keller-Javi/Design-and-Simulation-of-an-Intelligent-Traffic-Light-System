@@ -2,4 +2,7 @@ venv/
 *.pt
 carla_dataset/
 *.mp4
-core/__pycache__/
+carla_publisher/core/__pycache__/
+opencv_subscriber/core/__pycache__/
+__pycache__/
+opencv_subscriber/opencv_subscriber_and_capture.py

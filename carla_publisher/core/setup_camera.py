@@ -1,7 +1,7 @@
 import queue
 import carla
 
-def add_camera_to_traffic_light(world, blueprint_library, target_location):
+def find_traffic_light(world, target_location):
     all_traffic_lights = world.get_actors().filter('*.traffic_light')
     target_traffic_light = None
         
@@ -12,19 +12,16 @@ def add_camera_to_traffic_light(world, blueprint_library, target_location):
             min_distance = distance
             target_traffic_light = light
         
-    if not target_traffic_light:
-        print("Error: No se pudo encontrar un semáforo cerca de la ubicación objetivo.")
-        return
-        
-    print(f"Semáforo específico seleccionado: ID {target_traffic_light.id} en {target_traffic_light.get_location()}")
+    return target_traffic_light
 
-    # --- 3. CONFIGURAR LA CÁMARA DEL SEMÁFORO ---
+def add_camera_to_traffic_light(world, blueprint_library, target_location, target_rotation):
     camera_bp = blueprint_library.find('sensor.camera.rgb')
     camera_bp.set_attribute('image_size_x', '800')
     camera_bp.set_attribute('image_size_y', '600')
         
-    camera_transform = carla.Transform(carla.Location(x=-4,z=4.5), carla.Rotation(pitch=-18.22, yaw=90.85, roll=0.00))
-    camera = world.spawn_actor(camera_bp, camera_transform, attach_to=target_traffic_light)
+    #camera_transform = carla.Transform(carla.Location(x=-4,z=4.5), carla.Rotation(pitch=-18.22, yaw=90.85, roll=0.00))
+    camera_transform = carla.Transform(target_location, target_rotation)
+    camera = world.spawn_actor(camera_bp, camera_transform)
 
     image_queue = queue.Queue()
     camera.listen(image_queue.put)

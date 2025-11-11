@@ -12,14 +12,16 @@ from core.dynamic_weather import Weather
 
 def main():
     # --- Configuración de ZeroMQ ---
-    zmq_publisher = ZMQPublisher()
+    zmq_publisher_1 = ZMQPublisher(port=5555)
+    zmq_publisher_2 = ZMQPublisher(port=5556)
 
     # --- Conexión a CARLA ---
     client = carla.Client('localhost', 2000)
-    client.set_timeout(20.0)
+    client.set_timeout(25.0)
 
     setup = SetupWorld(client, map_name='Town04')
-    
+    client.set_timeout(25.0)
+
     world = setup.load_map()
 
     actor_list = []
@@ -51,8 +53,11 @@ def main():
         # Limitar la zana de spawn de vehículos
         spawn_points = world.get_map().get_spawn_points()
         
-        target_location_1 = carla.Location(x=351, y=-180, z=0.00)
-        #target_location_2 = carla.Location(x=351, y=-180, z=0.00)
+        #target_location_1 = carla.Location(x=351, y=-180, z=0.00)
+        target_location_1 = carla.Location(x=210, y=-254, z=6.0)
+        target_rotation_1 = carla.Rotation(pitch=-7.5, yaw=137.5, roll=0.0)
+        target_location_2 = carla.Location(x=195, y=-238, z=6.0)
+        target_rotation_2 = carla.Rotation(pitch=-13.1, yaw=-48.2, roll=0.0)
 
         nearby_spawns = [
             sp for sp in spawn_points 
@@ -71,8 +76,8 @@ def main():
 
         nearby_spawns = [
             sp for sp in spawn_points 
-            if sp.location.distance(target_location_1) > 40.0
-            and sp.location.distance(target_location_1) < 80.0
+            if sp.location.distance(target_location_1) > 50.0
+            and sp.location.distance(target_location_1) < 100.0
         ]
 
         # Generate pedestrians
@@ -80,12 +85,14 @@ def main():
 
         actor_list = spawn_pedestrians(world, client, number_of_pedestrians, actor_list)
 
-        # --- 2. SELECCIONAR UN SEMÁFORO ESPECÍFICO POR UBICACIÓN
-
-        camera, image_queue = add_camera_to_traffic_light(world, blueprint_library, target_location_1)
+        # --- CONFIGURAR CÁMARAS EN SEMÁFOROS ---
+        camera, image_queue_1 = add_camera_to_traffic_light(world, blueprint_library, target_location_1, target_rotation_1)
         actor_list.append(camera)
 
-        # --- 4. BUCLE PRINCIPAL MAESTRO ---
+        camera, image_queue_2 = add_camera_to_traffic_light(world, blueprint_library, target_location_2, target_rotation_2)
+        actor_list.append(camera)
+
+        # --- BUCLE PRINCIPAL MAESTRO ---
         while True:
             world.tick()
 
@@ -120,14 +127,23 @@ def main():
             # --- PUBLICAR DATOS A TRAVÉS DE ZEROMQ ---
             # Enviar imagen de la cámara
             try:
-                image = image_queue.get(block=False)
+                image = image_queue_1.get(block=False)
                 array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
                 array = np.reshape(array, (image.height, image.width, 4))
                 
-                zmq_publisher.send_image(image, array)
+                zmq_publisher_1.send_image(image, array)
 
             except queue.Empty:
-                continue
+                print("No se recibió imagen de la cámara 1.")
+            
+            try:
+                image = image_queue_2.get(block=False)
+                array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
+                array = np.reshape(array, (image.height, image.width, 4))
+                
+                zmq_publisher_2.send_image(image, array)
+            except queue.Empty:
+                print("No se recibió imagen de la cámara 2.")
 
     finally:
         print("\nLimpiando y restaurando la configuración...")
@@ -138,7 +154,8 @@ def main():
             actors_to_destroy = [x for x in actor_list if x and x.is_alive]
             client.apply_batch([carla.command.DestroyActor(x) for x in actors_to_destroy])
         
-        zmq_publisher.close()
+        zmq_publisher_1.close()
+        zmq_publisher_2.close()
 
 if __name__ == '__main__':
     try:
