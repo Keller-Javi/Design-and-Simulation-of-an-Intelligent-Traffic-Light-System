@@ -34,8 +34,8 @@ class YoloDetector:
         return boxes[mask], confs[mask], [COCO_VEHICLES[c] for c in clss[mask]]
 
 class VehicleTracker:
-    def __init__(self):
-        self.tracker = DeepSort(max_age=3, n_init=3, nms_max_overlap=0.7)
+    def __init__(self, max_age=3, n_init=3, nms_max_overlap=0.7):
+        self.tracker = DeepSort(max_age=max_age, n_init=n_init, nms_max_overlap=nms_max_overlap)
 
     def update(self, boxes, scores, frame, timestamp):
         detections = []
@@ -56,9 +56,9 @@ class VehicleTracker:
         return np.array(out_boxes), np.array(out_ids)
 
 class VisionTrackerBlock:
-    def __init__(self):
-        self.detector = YoloDetector()
-        self.tracker = VehicleTracker()
+    def __init__(self, confidence_threshold=0.2, imgsz=640, max_age=3, n_init=3, nms_max_overlap=0.7):
+        self.detector = YoloDetector(conf=confidence_threshold, imgsz=imgsz)
+        self.tracker = VehicleTracker(max_age=max_age, n_init=n_init, nms_max_overlap=nms_max_overlap)
         self.fps = None
         self.alpha = 0.1
 

@@ -94,71 +94,66 @@ def main():
 
         # --- BUCLE PRINCIPAL MAESTRO ---
         while True:
-            world.tick()
-
-            # --- Actualizar clima dinámico ---
-            world_snapshot = world.get_snapshot()
-            timestamp = world_snapshot.timestamp
-            elapsed_time += timestamp.delta_seconds
-            if elapsed_time > update_freq:
-                weather.tick(speed_factor * elapsed_time)
-                world.set_weather(weather.weather)
-                sys.stdout.write('\r' + str(weather) + 12 * ' ')
-                sys.stdout.flush()
-                elapsed_time = 0.0
-
-            # --- Determinar hora simulada y tránsito dinámico ---
-            current_hour = weather.current_hour()
-            
-            # Determinar cantidad de vehículos según hora
-            if 7 <= current_hour < 9 or 11 <= current_hour < 13 or 16 <= current_hour < 18:
-                number_of_vehicles = 50  # Tránsito alto
-            elif 6 <= current_hour < 22:
-                number_of_vehicles = 25  # Tránsito moderado
-            else:
-                number_of_vehicles = 10  # Tránsito bajo
-            
-            # --- Gestionar vehículos dinámicamente ---
-            # Eliminar vehículos lejanos al semáforo
-            actor_list = delete_vehicles(actor_list, target_location_1)
-            # Generar nuevos vehículos si es necesario
-            actor_list = spawn_vehicles(world, blueprints, nearby_spawns, number_of_vehicles, actor_list)
-            
-            # --- PUBLICAR DATOS A TRAVÉS DE ZEROMQ ---
-            # Enviar imagen de la cámara
             try:
-                image = image_queue_1.get(block=False)
-                array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
-                array = np.reshape(array, (image.height, image.width, 4))
-                
-                zmq_publisher_1.send_image(image, array)
+                world.tick()
 
-            except queue.Empty:
-                print("No se recibió imagen de la cámara 1.")
-            
-            try:
-                image = image_queue_2.get(block=False)
-                array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
-                array = np.reshape(array, (image.height, image.width, 4))
-                
-                zmq_publisher_2.send_image(image, array)
-            except queue.Empty:
-                print("No se recibió imagen de la cámara 2.")
+                # --- Actualizar clima dinámico ---
+                world_snapshot = world.get_snapshot()
+                timestamp = world_snapshot.timestamp
+                elapsed_time += timestamp.delta_seconds
+                if elapsed_time > update_freq:
+                    weather.tick(speed_factor * elapsed_time)
+                    world.set_weather(weather.weather)
+                    sys.stdout.write('\r' + str(weather) + 12 * ' ')
+                    sys.stdout.flush()
+                    elapsed_time = 0.0
 
+                # --- Determinar hora simulada y tránsito dinámico ---
+                current_hour = weather.current_hour()
+                
+                # Determinar cantidad de vehículos según hora
+                if 7 <= current_hour < 9 or 11 <= current_hour < 13 or 16 <= current_hour < 18:
+                    number_of_vehicles = 50  # Tránsito alto
+                elif 6 <= current_hour < 22:
+                    number_of_vehicles = 25  # Tránsito moderado
+                else:
+                    number_of_vehicles = 10  # Tránsito bajo
+                
+                # --- Gestionar vehículos dinámicamente ---
+                # Eliminar vehículos lejanos al semáforo
+                actor_list = delete_vehicles(actor_list, target_location_1)
+                # Generar nuevos vehículos si es necesario
+                actor_list = spawn_vehicles(world, blueprints, nearby_spawns, number_of_vehicles, actor_list)
+                
+                # --- PUBLICAR DATOS A TRAVÉS DE ZEROMQ ---
+                # Enviar imagen de la cámara
+                for (image_queue, zmq_publisher) in [(image_queue_1, zmq_publisher_1),
+                                                            (image_queue_2, zmq_publisher_2)]:
+                    try:
+                        image = image_queue.get(block=False)
+                        array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
+                        array = np.reshape(array, (image.height, image.width, 4))
+                        
+                        zmq_publisher.send_image(image, array)
+                    except queue.Empty:
+                        print("No se recibió imagen de una de las cámaras.")
+            except KeyboardInterrupt:
+                print("Interrupción por teclado recibida. Saliendo...")
+                break
     finally:
-        print("\nLimpiando y restaurando la configuración...")
+        try:
+            if 'world' in locals() and 'original_settings' in locals():
+                world.apply_settings(original_settings)
+            if 'client' in locals() and 'actor_list' in locals():
+                actors_to_destroy = [x for x in actor_list if x and x.is_alive]
+                client.apply_batch([carla.command.DestroyActor(x) for x in actors_to_destroy])
+            
+            zmq_publisher_1.close()
+            zmq_publisher_2.close()
 
-        if 'world' in locals() and 'original_settings' in locals():
-            world.apply_settings(original_settings)
-        if 'client' in locals() and 'actor_list' in locals():
-            actors_to_destroy = [x for x in actor_list if x and x.is_alive]
-            client.apply_batch([carla.command.DestroyActor(x) for x in actors_to_destroy])
-        
-        zmq_publisher_1.close()
-        zmq_publisher_2.close()
+            print("\nSimulación terminada. Actores eliminados.")
+        except Exception as e:
+            print(f"Error durante la limpieza: {e}")
 
 if __name__ == '__main__':
-    try:
-        main()
-    except KeyboardInterrupt:
-        print('\nCancelado por el usuario.')
+    main()
