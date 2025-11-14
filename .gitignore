@@ -1,5 +1,6 @@
 venv/
 *.pt
+*onnx
 carla_dataset/
 *.mp4
 carla_publisher/core/__pycache__/

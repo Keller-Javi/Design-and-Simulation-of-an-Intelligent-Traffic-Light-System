@@ -9,6 +9,7 @@ from core.zmq_publisher import ZMQPublisher
 from core.setup_world import SetupWorld
 from core.setup_camera import add_camera_to_traffic_light
 from core.dynamic_weather import Weather
+from core.traffic_metrics import TrafficMetrics
 
 def main():
     # --- Configuración de ZeroMQ ---
@@ -27,6 +28,10 @@ def main():
     actor_list = []
     original_settings = world.get_settings()
     
+    # --- Configurar ROI y ocultar objetos lejanos ---
+    central_point = carla.Location(x=190.5, y=-239.5, z=0.0)
+    SetupWorld.toggle_far_environment_objects(setup.world, central_point, radius=200.0)
+
     try:
         # --- CONFIGURAR EL MUNDO EN MODO SÍNCRONO ---
         settings = world.get_settings()
@@ -92,11 +97,17 @@ def main():
         camera, image_queue_2 = add_camera_to_traffic_light(world, blueprint_library, target_location_2, target_rotation_2)
         actor_list.append(camera)
 
+        # --- CONFIGURAR MÉTRICAS DE TRÁFICO ---
+        traffic_metrics = TrafficMetrics(world, central_point, roi_radius=62.5, draw_roi=True)
+
         # --- BUCLE PRINCIPAL MAESTRO ---
         while True:
             try:
                 world.tick()
 
+                # --- ACTUALIZAR MÉTRICAS DE TRÁFICO ---
+                traffic_metrics.update()
+                
                 # --- Actualizar clima dinámico ---
                 world_snapshot = world.get_snapshot()
                 timestamp = world_snapshot.timestamp
