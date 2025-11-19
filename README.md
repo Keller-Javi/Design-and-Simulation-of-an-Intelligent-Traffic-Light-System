@@ -8,42 +8,49 @@ Consiste en una **simulación de semáforos inteligentes** utilizando **CARLA Si
 ## Estructura del proyecto
 ```
 .
-├── carla_publisher
+├── carla_sim
 │   ├── core
 │   │   ├── dynamic_weather.py
 │   │   ├── setup_camera.py
 │   │   ├── setup_world.py
 │   │   ├── spawn_utils.py
+│   │   ├── traffic_metrics.py
 │   │   └── zqm_publisher.py
-│   ├── carla_publisher.py
+│   ├── run_simulator.py
 │   └── spectator.py
-├── opencv_subscriber
+├── vision_processing
 │   ├── core
-│   │   └── inference_class.py
+│   │   ├── inference_class.py
+│   │   ├── timing_algorithms.py
+│   │   ├── utils.py
+│   │   └── zmq_utils.py
 │   ├── model.py
 │   ├── opencv_capture.py
-│   └── opencv_subscriber.py
+│   └── run_vision.py
 ├── .gitignore
 └── requierements.txt
 ```
----
-## Descripción de los módulos principales
 
-### `carla_publisher.py`
+Descripción general de los distintos modulos:
+
+### `run_simulator.py`
 Encargado de:
 - Cargar y configurar el mundo de la simulación (mapa, clima, tráfico, etc.).
 - Administrar parámetros dinámicos como el **clima** y el **tránsito vehicular**.
 - Transmitir los **frames capturados por las cámaras** a través de **puertos ZMQ**.
+- Guardar métricas del tráfico en un archivo csv.
 
-> Estos frames se transfieren por defecto mediante los puertos 5555 para la cámara 1 y 5556 para la cámara 2.
-### `opencv_subscriber.py`
+> Estos frames se transfieren por defecto mediante los puertos 5555 (cámara 1) y 5556 (cámara 2).
+### `run_vision.py`
 Encargado de:
 - **Leer un puerto específico** para recibir los frames transmitidos.
 - **Configurar los parametros** de YOLO y DeepSort, como confianza, edad y superposición de objetos. 
 - **Realizar inferencias** sobre los frames mediante un modelo de detección (por ejemplo, YOLO).
-- **Visualizar** los resultados de la inferencia en tiempo real.  
+- **Visualizar** los resultados de la inferencia en tiempo real.
+- **Tomar desiciones** en base a los conteos de los vehículos de cada semáforo.
+- **Actualizar la temporización** en base al algoritmo seleccionado.  
 
-Este necesita un archivo de configuración para funcionar, es un archivo formato json que contiene lo siguiente:
+Este necesita dos archivos de configuración para funcionar, es uno para cada cámara y es un archivo formato json que contiene lo siguiente:
 ```yaml
 {
   "port": 5555,
@@ -63,11 +70,12 @@ Este necesita un archivo de configuración para funcionar, es un archivo formato
 }
 ```
 > Ejemplo de como ejecutar:  
-> `python .\opencv_subscriber\opencv_subscriber.py --config opencv_subscriber/config/config_cam1.json`
+> `python .\vision_processing\run_vision.py --cam1 vision_processing/config/config_cam1.json --cam2 vision_processing/config/config_cam2.json`
 
----
+### `Modularizaciones`
+- Tanto `run_simulator` como `run_vision` cuentan con submódulos dentro de la carpeta **core**, los cuales encapsulan funcionalidades específicas. Los nombres de los módulos describen claramente su propósito.
 
-## Scripts auxiliares
+### `Scripts auxiliares`
 
 Estos scripts no se utilizan actualmente, pero pueden ser útiles para desarrollo o depuración:
 

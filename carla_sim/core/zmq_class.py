@@ -23,3 +23,19 @@ class ZMQPublisher:
         self.socket.close()
         self.context.term()
         print("ZMQ Publisher cerrado.")
+
+class ZMQSubscriber:
+    def __init__(self, port):
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.SUB)
+        self.socket.setsockopt(zmq.CONFLATE, 1)
+        self.socket.connect(f"tcp://localhost:{port}")
+        self.subscriber_sockets = []
+
+    def reseive(self, flags=zmq.NOBLOCK):
+        return self.socket.recv_pyobj(flags=flags)
+    
+    def close(self):
+        self.socket.close()
+        self.context.term()
+        print("[SUB] Cerrado correctamente")

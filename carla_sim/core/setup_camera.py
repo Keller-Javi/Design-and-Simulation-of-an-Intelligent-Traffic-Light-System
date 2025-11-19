@@ -14,7 +14,7 @@ def find_traffic_light(world, target_location):
         
     return target_traffic_light
 
-def add_camera_to_traffic_light(world, blueprint_library, target_location, target_rotation):
+def add_camera(world, blueprint_library, target_location, target_rotation):
     camera_bp = blueprint_library.find('sensor.camera.rgb')
     camera_bp.set_attribute('image_size_x', '800')
     camera_bp.set_attribute('image_size_y', '600')

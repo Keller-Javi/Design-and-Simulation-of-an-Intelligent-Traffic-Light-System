@@ -5,9 +5,9 @@ import numpy as np
 import sys
 
 from core.spawn_utils import spawn_vehicles, spawn_pedestrians, delete_vehicles
-from core.zmq_publisher import ZMQPublisher
+from core.zmq_class import ZMQPublisher, ZMQSubscriber
 from core.setup_world import SetupWorld
-from core.setup_camera import add_camera_to_traffic_light
+from core.setup_camera import add_camera, find_traffic_light
 from core.dynamic_weather import Weather
 from core.traffic_metrics import TrafficMetrics
 
@@ -31,6 +31,26 @@ def main():
     # --- Configurar ROI y ocultar objetos lejanos ---
     central_point = carla.Location(x=190.5, y=-239.5, z=0.0)
     SetupWorld.toggle_far_environment_objects(setup.world, central_point, radius=200.0)
+
+    # --- Buscar los semáforos ---
+    targets = {
+        "A": carla.Location(x=210, y=-254, z=0.0),
+        "B": carla.Location(x=195, y=-238, z=0.0),
+        "C": carla.Location(x=220, y=-220, z=0.0),
+        "D": carla.Location(x=170, y=-250, z=0.0)
+    }
+
+    traffic_lights = {}
+    for key, location in targets.items():
+        traffic_light = find_traffic_light(world, location)
+        if traffic_light:
+            traffic_lights[key] = traffic_light
+            print(f"Semáforo {key} encontrado en {location}.")
+        else:
+            print(f"Semáforo {key} NO encontrado en {location}.")
+
+    # --- Configurar suscriptor ZeroMQ para recibir datos de visión ---
+    subscriber = ZMQSubscriber(port=5557)
 
     try:
         # --- CONFIGURAR EL MUNDO EN MODO SÍNCRONO ---
@@ -66,7 +86,7 @@ def main():
 
         nearby_spawns = [
             sp for sp in spawn_points 
-            if sp.location.distance(target_location_1) < 80.0
+            if sp.location.distance(target_location_1) < 100.0
         ]
 
         # Generate vehicles
@@ -81,8 +101,8 @@ def main():
 
         nearby_spawns = [
             sp for sp in spawn_points 
-            if sp.location.distance(target_location_1) > 50.0
-            and sp.location.distance(target_location_1) < 100.0
+            if sp.location.distance(target_location_1) > 60.0
+            and sp.location.distance(target_location_1) < 125.0
         ]
 
         # Generate pedestrians
@@ -91,10 +111,10 @@ def main():
         actor_list = spawn_pedestrians(world, client, number_of_pedestrians, actor_list)
 
         # --- CONFIGURAR CÁMARAS EN SEMÁFOROS ---
-        camera, image_queue_1 = add_camera_to_traffic_light(world, blueprint_library, target_location_1, target_rotation_1)
+        camera, image_queue_1 = add_camera(world, blueprint_library, target_location_1, target_rotation_1)
         actor_list.append(camera)
 
-        camera, image_queue_2 = add_camera_to_traffic_light(world, blueprint_library, target_location_2, target_rotation_2)
+        camera, image_queue_2 = add_camera(world, blueprint_library, target_location_2, target_rotation_2)
         actor_list.append(camera)
 
         # --- CONFIGURAR MÉTRICAS DE TRÁFICO ---
@@ -104,9 +124,6 @@ def main():
         while True:
             try:
                 world.tick()
-
-                # --- ACTUALIZAR MÉTRICAS DE TRÁFICO ---
-                traffic_metrics.update()
                 
                 # --- Actualizar clima dinámico ---
                 world_snapshot = world.get_snapshot()
@@ -136,6 +153,9 @@ def main():
                 # Generar nuevos vehículos si es necesario
                 actor_list = spawn_vehicles(world, blueprints, nearby_spawns, number_of_vehicles, actor_list)
                 
+                # --- ACTUALIZAR MÉTRICAS DE TRÁFICO ---
+                traffic_metrics.update(current_hour)
+
                 # --- PUBLICAR DATOS A TRAVÉS DE ZEROMQ ---
                 # Enviar imagen de la cámara
                 for (image_queue, zmq_publisher) in [(image_queue_1, zmq_publisher_1),
@@ -148,6 +168,15 @@ def main():
                         zmq_publisher.send_image(image, array)
                     except queue.Empty:
                         print("No se recibió imagen de una de las cámaras.")
+                
+                # Recibir datos procesados de visión
+                try:
+                    data = subscriber.reseive()
+                    
+                    print("Datos recibidos del procesador de visión:", data)
+                except:
+                    # No hay datos disponibles en este momento
+                    pass
             except KeyboardInterrupt:
                 print("Interrupción por teclado recibida. Saliendo...")
                 break
@@ -161,6 +190,8 @@ def main():
             
             zmq_publisher_1.close()
             zmq_publisher_2.close()
+
+            subscriber.close()
 
             print("\nSimulación terminada. Actores eliminados.")
         except Exception as e:
