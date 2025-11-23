@@ -3,7 +3,7 @@ venv/
 *onnx
 carla_dataset/
 *.mp4
-carla_publisher/core/__pycache__/
+carla_sim/core/__pycache__/
 opencv_subscriber/core/__pycache__/
 __pycache__/
-opencv_subscriber/opencv_subscriber_and_capture.py
+*\vision_and_capture.py

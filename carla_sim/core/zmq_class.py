@@ -30,10 +30,14 @@ class ZMQSubscriber:
         self.socket = self.context.socket(zmq.SUB)
         self.socket.setsockopt(zmq.CONFLATE, 1)
         self.socket.connect(f"tcp://localhost:{port}")
+        self.socket.setsockopt_string(zmq.SUBSCRIBE, "")
         self.subscriber_sockets = []
 
-    def reseive(self, flags=zmq.NOBLOCK):
-        return self.socket.recv_pyobj(flags=flags)
+    def reseive(self):
+        try:
+            return self.socket.recv_pyobj(flags=zmq.NOBLOCK)
+        except zmq.Again:
+            return None
     
     def close(self):
         self.socket.close()

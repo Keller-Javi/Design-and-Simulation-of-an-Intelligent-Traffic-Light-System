@@ -7,9 +7,10 @@ import sys
 from core.spawn_utils import spawn_vehicles, spawn_pedestrians, delete_vehicles
 from core.zmq_class import ZMQPublisher, ZMQSubscriber
 from core.setup_world import SetupWorld
-from core.setup_camera import add_camera, find_traffic_light
+from core.setup_camera import add_camera
 from core.dynamic_weather import Weather
 from core.traffic_metrics import TrafficMetrics
+from core.traffic_light_utils import TrafficLightManager
 
 def main():
     # --- Configuración de ZeroMQ ---
@@ -32,23 +33,6 @@ def main():
     central_point = carla.Location(x=190.5, y=-239.5, z=0.0)
     SetupWorld.toggle_far_environment_objects(setup.world, central_point, radius=200.0)
 
-    # --- Buscar los semáforos ---
-    targets = {
-        "A": carla.Location(x=210, y=-254, z=0.0),
-        "B": carla.Location(x=195, y=-238, z=0.0),
-        "C": carla.Location(x=220, y=-220, z=0.0),
-        "D": carla.Location(x=170, y=-250, z=0.0)
-    }
-
-    traffic_lights = {}
-    for key, location in targets.items():
-        traffic_light = find_traffic_light(world, location)
-        if traffic_light:
-            traffic_lights[key] = traffic_light
-            print(f"Semáforo {key} encontrado en {location}.")
-        else:
-            print(f"Semáforo {key} NO encontrado en {location}.")
-
     # --- Configurar suscriptor ZeroMQ para recibir datos de visión ---
     subscriber = ZMQSubscriber(port=5557)
 
@@ -63,9 +47,19 @@ def main():
 
         blueprint_library = world.get_blueprint_library()
 
+        # --- CONFIGURAR SEMÁFOROS ---
+        targets = {
+            "A": carla.Location(x=207.4, y=-254.7, z=0.0), # Posición -> x=207.37, y=-254.69, z=6.44
+            "B": carla.Location(x=209.4, y=-242.4, z=0.0), # Posición -> x=209.37, y=-242.38, z=6.63
+            "C": carla.Location(x=197.2, y=-238, z=0.0), # Posición -> x=197.16, y=-238.00, z=6.91
+            "D": carla.Location(x=191.5, y=-250, z=0.0) # Posición -> x=191.53, y=-250.18, z=6.91
+        }
+
+        traffic_light_manager = TrafficLightManager(world, targets)
+
         # --- CONFIGURAR EL CLIMA DINÁMICO ---
         weather = Weather(world.get_weather())
-        speed_factor = 1.0
+        speed_factor = 2.0  # Velocidad de cambio climático
         update_freq = 0.1 / speed_factor
 
         elapsed_time = 0.0
@@ -94,19 +88,20 @@ def main():
 
         # No queremos que ciertos vehículos aparezcan
         vehicles_to_not_spawn = ["vehicle.micro.microlino", "vehicle.tesla.cybertruck", "vehicle.bh.crossbike", "vehicle.diamondback.century", "vehicle.gazelle.omafiets"]
+        vehicles_to_not_spawn += ["vehicle.mitsubishi.fusorosa"]
         blueprints = blueprint_library.filter('vehicle.*')
         blueprints = [bp for bp in blueprints if bp.id not in vehicles_to_not_spawn]
         
-        actor_list = spawn_vehicles(world, blueprints, nearby_spawns, number_of_vehicles, actor_list)
+        actor_list = spawn_vehicles(world, traffic_manager, blueprints, nearby_spawns, number_of_vehicles, actor_list)
 
         nearby_spawns = [
             sp for sp in spawn_points 
             if sp.location.distance(target_location_1) > 60.0
-            and sp.location.distance(target_location_1) < 125.0
+            and sp.location.distance(target_location_1) < 115.0
         ]
 
         # Generate pedestrians
-        number_of_pedestrians = 75
+        number_of_pedestrians = 50
 
         actor_list = spawn_pedestrians(world, client, number_of_pedestrians, actor_list)
 
@@ -118,9 +113,12 @@ def main():
         actor_list.append(camera)
 
         # --- CONFIGURAR MÉTRICAS DE TRÁFICO ---
-        traffic_metrics = TrafficMetrics(world, central_point, roi_radius=62.5, draw_roi=True)
+        traffic_metrics = TrafficMetrics(world, central_point, roi_radius=62.5, draw_roi=False)
 
+        # carla.World.get_lightmanager().turn_on(lights)
+        
         # --- BUCLE PRINCIPAL MAESTRO ---
+
         while True:
             try:
                 world.tick()
@@ -141,9 +139,9 @@ def main():
                 
                 # Determinar cantidad de vehículos según hora
                 if 7 <= current_hour < 9 or 11 <= current_hour < 13 or 16 <= current_hour < 18:
-                    number_of_vehicles = 50  # Tránsito alto
+                    number_of_vehicles = 65  # Tránsito alto
                 elif 6 <= current_hour < 22:
-                    number_of_vehicles = 25  # Tránsito moderado
+                    number_of_vehicles = 30  # Tránsito moderado
                 else:
                     number_of_vehicles = 10  # Tránsito bajo
                 
@@ -151,7 +149,7 @@ def main():
                 # Eliminar vehículos lejanos al semáforo
                 actor_list = delete_vehicles(actor_list, target_location_1)
                 # Generar nuevos vehículos si es necesario
-                actor_list = spawn_vehicles(world, blueprints, nearby_spawns, number_of_vehicles, actor_list)
+                actor_list = spawn_vehicles(world, traffic_manager, blueprints, nearby_spawns, number_of_vehicles, actor_list)
                 
                 # --- ACTUALIZAR MÉTRICAS DE TRÁFICO ---
                 traffic_metrics.update(current_hour)
@@ -172,13 +170,14 @@ def main():
                 # Recibir datos procesados de visión
                 try:
                     data = subscriber.reseive()
-                    
-                    print("Datos recibidos del procesador de visión:", data)
+
+                    # Aplicar estados de semáforos
+                    if data:
+                        traffic_light_manager.apply_traffic_lights_state(data['states'])
                 except:
                     # No hay datos disponibles en este momento
                     pass
             except KeyboardInterrupt:
-                print("Interrupción por teclado recibida. Saliendo...")
                 break
     finally:
         try:
@@ -190,8 +189,7 @@ def main():
             
             zmq_publisher_1.close()
             zmq_publisher_2.close()
-
-            subscriber.close()
+ 
 
             print("\nSimulación terminada. Actores eliminados.")
         except Exception as e:

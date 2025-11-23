@@ -1,7 +1,7 @@
 import carla
 import random
 
-def spawn_vehicles(world, blueprint_library, spawn_points, number_of_vehicles, actor_list, min_spawn_distance=10.0):
+def spawn_vehicles(world, traffic_manager, blueprint_library, spawn_points, number_of_vehicles, actor_list, min_spawn_distance=10.0):
     """
     Descripción: Genera vehículos en el mundo hasta alcanzar el número especificado.
     Returna:
@@ -42,6 +42,8 @@ def spawn_vehicles(world, blueprint_library, spawn_points, number_of_vehicles, a
             if vehicle is not None:
                 actor_list.append(vehicle)
                 vehicle.set_autopilot(True)
+                vehicle.set_light_state(carla.VehicleLightState.HighBeam)
+                traffic_manager.vehicle_lane_offset(vehicle, 0.3)
                 vehicle_locations.append(spawn_point.location)
                 spawn_count += 1
 
@@ -56,7 +58,7 @@ def delete_vehicles(actor_list, target_location):
     vehicles_to_delete = [
         actor for actor in actor_list 
         if actor and actor.is_alive and 'vehicle.' in actor.type_id 
-        and target_location.distance(actor.get_location()) > 150.0
+        and target_location.distance(actor.get_location()) > 130.0
     ]
 
     for actor in actor_list:

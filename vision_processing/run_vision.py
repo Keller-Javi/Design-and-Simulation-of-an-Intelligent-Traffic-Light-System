@@ -75,9 +75,12 @@ def main():
                 "D": sem_D
             }
 
+            #print(f"Conteos de semáforos: {sem_counts}")
+
             timing_output = timing_algorithm.update(sem_counts)
 
             publisher.send_data(timing_output)
+            #publisher.send_data(sem_counts)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break

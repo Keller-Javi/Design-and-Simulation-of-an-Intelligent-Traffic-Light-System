@@ -1,19 +1,6 @@
 import queue
 import carla
 
-def find_traffic_light(world, target_location):
-    all_traffic_lights = world.get_actors().filter('*.traffic_light')
-    target_traffic_light = None
-        
-    min_distance = float('inf')
-    for light in all_traffic_lights:
-        distance = light.get_location().distance(target_location)
-        if distance < min_distance:
-            min_distance = distance
-            target_traffic_light = light
-        
-    return target_traffic_light
-
 def add_camera(world, blueprint_library, target_location, target_rotation):
     camera_bp = blueprint_library.find('sensor.camera.rgb')
     camera_bp.set_attribute('image_size_x', '800')
