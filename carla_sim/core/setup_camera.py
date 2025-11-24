@@ -1,5 +1,6 @@
 import queue
 import carla
+import numpy as np
 
 def add_camera(world, blueprint_library, target_location, target_rotation):
     camera_bp = blueprint_library.find('sensor.camera.rgb')
@@ -14,3 +15,32 @@ def add_camera(world, blueprint_library, target_location, target_rotation):
     camera.listen(image_queue.put)
 
     return camera, image_queue
+
+def prepare_camera_data(image_queue_1, image_queue_2):
+    data = {
+        "image1": None,
+        "image2": None
+    }
+
+    for idx, image_queue in enumerate([image_queue_1, image_queue_2], start=1):
+        key = f"image{idx}"
+        try:
+            image = image_queue.get(block=False)
+
+            array = np.frombuffer(image.raw_data, dtype=np.uint8)
+            array = np.reshape(array, (image.height, image.width, 4))
+
+            data[key] = {
+                'metadata': {
+                    'width': image.width,
+                    'height': image.height,
+                    'frame': image.frame,
+                    'timestamp': image.timestamp,
+                },
+                'image': array
+            }
+
+        except queue.Empty:
+            print(f"No se recibió imagen de la cámara {key}.")
+
+    return data

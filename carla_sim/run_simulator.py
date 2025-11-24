@@ -1,21 +1,19 @@
 
 import carla
-import queue
-import numpy as np
 import sys
+import time
 
 from core.spawn_utils import spawn_vehicles, spawn_pedestrians, delete_vehicles
 from core.zmq_class import ZMQPublisher, ZMQSubscriber
 from core.setup_world import SetupWorld
-from core.setup_camera import add_camera
+from core.setup_camera import add_camera, prepare_camera_data
 from core.dynamic_weather import Weather
 from core.traffic_metrics import TrafficMetrics
 from core.traffic_light_utils import TrafficLightManager
 
 def main():
     # --- Configuración de ZeroMQ ---
-    zmq_publisher_1 = ZMQPublisher(port=5555)
-    zmq_publisher_2 = ZMQPublisher(port=5556)
+    zmq_publisher = ZMQPublisher(port=5555)
 
     # --- Conexión a CARLA ---
     client = carla.Client('localhost', 2000)
@@ -40,9 +38,9 @@ def main():
         # --- CONFIGURAR EL MUNDO EN MODO SÍNCRONO ---
         settings = world.get_settings()
         settings.synchronous_mode = True
-        settings.fixed_delta_seconds = 0.05
+        #settings.fixed_delta_seconds = 0.05
         settings.max_substep_delta_time = 0.05     # Asegura estabilidad del paso de física
-        settings.max_substeps = 1
+        settings.max_substeps = 5
         world.apply_settings(settings)
 
         blueprint_library = world.get_blueprint_library()
@@ -59,7 +57,7 @@ def main():
 
         # --- CONFIGURAR EL CLIMA DINÁMICO ---
         weather = Weather(world.get_weather())
-        speed_factor = 2.0  # Velocidad de cambio climático
+        speed_factor = 0.25  # Velocidad de cambio climático
         update_freq = 0.1 / speed_factor
 
         elapsed_time = 0.0
@@ -84,7 +82,7 @@ def main():
         ]
 
         # Generate vehicles
-        number_of_vehicles = 50
+        number_of_vehicles = 20
 
         # No queremos que ciertos vehículos aparezcan
         vehicles_to_not_spawn = ["vehicle.micro.microlino", "vehicle.tesla.cybertruck", "vehicle.bh.crossbike", "vehicle.diamondback.century", "vehicle.gazelle.omafiets"]
@@ -114,11 +112,8 @@ def main():
 
         # --- CONFIGURAR MÉTRICAS DE TRÁFICO ---
         traffic_metrics = TrafficMetrics(world, central_point, roi_radius=62.5, draw_roi=False)
-
-        # carla.World.get_lightmanager().turn_on(lights)
         
         # --- BUCLE PRINCIPAL MAESTRO ---
-
         while True:
             try:
                 world.tick()
@@ -156,27 +151,24 @@ def main():
 
                 # --- PUBLICAR DATOS A TRAVÉS DE ZEROMQ ---
                 # Enviar imagen de la cámara
-                for (image_queue, zmq_publisher) in [(image_queue_1, zmq_publisher_1),
-                                                            (image_queue_2, zmq_publisher_2)]:
-                    try:
-                        image = image_queue.get(block=False)
-                        array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
-                        array = np.reshape(array, (image.height, image.width, 4))
-                        
-                        zmq_publisher.send_image(image, array)
-                    except queue.Empty:
-                        print("No se recibió imagen de una de las cámaras.")
+                camera_data = prepare_camera_data(image_queue_1, image_queue_2)
+                zmq_publisher.send_frame(camera_data)
                 
-                # Recibir datos procesados de visión
-                try:
-                    data = subscriber.reseive()
+                data_received = False
+                while not data_received:
+                    # Recibir datos procesados de visión
+                    try:
+                        data = subscriber.reseive()
 
-                    # Aplicar estados de semáforos
-                    if data:
-                        traffic_light_manager.apply_traffic_lights_state(data['states'])
-                except:
-                    # No hay datos disponibles en este momento
-                    pass
+                        # Aplicar estados de semáforos
+                        if data:
+                            data_received = True
+                            traffic_light_manager.apply_traffic_lights_state(data['states'])
+                    except:
+                        # No hay datos disponibles en este momento
+                        pass
+
+                    time.sleep(0.01)
             except KeyboardInterrupt:
                 break
     finally:
@@ -187,10 +179,8 @@ def main():
                 actors_to_destroy = [x for x in actor_list if x and x.is_alive]
                 client.apply_batch([carla.command.DestroyActor(x) for x in actors_to_destroy])
             
-            zmq_publisher_1.close()
-            zmq_publisher_2.close()
- 
-
+            zmq_publisher.close()
+            subscriber.close()
             print("\nSimulación terminada. Actores eliminados.")
         except Exception as e:
             print(f"Error durante la limpieza: {e}")

@@ -7,16 +7,7 @@ class ZMQPublisher:
         self.socket.bind(f"tcp://*:{port}")
         print(f"ZMQ Publisher listo en el puerto {port}")
 
-    def send_image(self, image, array):
-        data_package = {
-            'metadata': {
-                'width': image.width,
-                'height': image.height,
-                'frame': image.frame,
-                'timestamp': image.timestamp
-            },
-            'image': array
-        }
+    def send_frame(self, data_package):
         self.socket.send_pyobj(data_package)
     
     def close(self):

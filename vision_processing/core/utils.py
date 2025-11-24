@@ -11,26 +11,29 @@ def load_camera_config(config_path):
     with open(config_path, "r") as f:
         cfg = json.load(f)
 
-    rois_cfg = cfg.get("rois", [])
-    if not rois_cfg:
-        raise ValueError(f"El archivo {config_path} no contiene ROIs.")
+    rois = []
+    for rois_cfg in ["rois_A", "rois_B"]:
+        if rois_cfg not in cfg:
+            raise ValueError(f"El archivo {config_path} no contiene ROIs definidos para {rois_cfg}.")
 
-    roi_structs = []
-    for roi in rois_cfg:
-        roi_structs.append({
-            "name": roi.get("name", "ROI"),
-            "points": np.array(roi.get("points", []), np.int32),
-            "color": tuple(roi.get("color", [255, 0, 0]))
-        })
+        roi_structs = []
+        for roi in cfg[rois_cfg]:
+            roi_structs.append({
+                "name": roi.get("name", "ROI"),
+                "points": np.array(roi.get("points", []), np.int32),
+                "color": tuple(roi.get("color", [255, 0, 0]))
+            })
+        rois.append(roi_structs)
 
     return {
-        "port": cfg.get("port"),
-        "window_name": cfg.get("window_name", f"Cam {cfg.get('port')}"),
-        "rois": roi_structs
+        "send_port": cfg.get("send_port", 5556),
+        "receive_port": cfg.get("receive_port", 5555),
+        "rois_a": rois[0],
+        "rois_b": rois[1]
     }
 
 
-def process_frame(data_package, cam_cfg, vision_system):
+def process_frame(data_package, rois, vision_system, window_name="Camera"):
     metadata = data_package["metadata"]
     image_rgba = data_package["image"]
     image_bgr = image_rgba[:, :, :3].copy()
@@ -43,7 +46,7 @@ def process_frame(data_package, cam_cfg, vision_system):
 
     # Dibujar ROIs + conteo
     total_counts = {}
-    for roi in cam_cfg["rois"]:
+    for roi in rois:
         cv2.polylines(image_bgr, [roi["points"]], isClosed=True, color=roi["color"], thickness=2)
         cv2.putText(image_bgr, roi["name"],
                     tuple(roi["points"][0]), cv2.FONT_HERSHEY_SIMPLEX,
@@ -78,6 +81,6 @@ def process_frame(data_package, cam_cfg, vision_system):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
         y_offset += 30
 
-    cv2.imshow(cam_cfg["window_name"], image_bgr)
+    cv2.imshow(window_name, image_bgr)
 
     return total_counts.values() 

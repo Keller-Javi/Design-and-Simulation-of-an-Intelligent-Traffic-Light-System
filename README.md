@@ -53,24 +53,36 @@ Encargado de:
 Este necesita dos archivos de configuración para funcionar, es uno para cada cámara y es un archivo formato json que contiene lo siguiente:
 ```yaml
 {
-  "port": 5555,
-  "window_name": "Camara 1",
-  "rois": [
+  "receive_port": 5555,
+  "send_port": 5557,
+  "rois_A": [
     {
       "name": "Semaforo A",
-      "points": [[0, 300], [400, 300], [400, 0], [0, 0]],
+      "points": [[25, 285], [65, 285], [262, 387], [169, 413]],
       "color": [255, 0, 0]
     },
     {
       "name": "Semaforo B",
-      "points": [[400, 300], [800, 300], [800, 0], [400, 0]],
+      "points": [[451, 367], [528, 389], [596, 307], [546, 285]],
       "color": [0, 255, 255]
+    }
+  ],
+  "rois_B": [
+    {
+      "name": "Semaforo C",
+      "points": [[265, 334], [130, 252], [97, 255], [184, 352]],
+      "color": [255, 255, 0]
+    },
+    {
+      "name": "Semaforo D",
+      "points": [[463, 320], [529, 338], [699, 259], [668, 256]],
+      "color": [0, 0, 255]
     }
   ]
 }
 ```
 > Ejemplo de como ejecutar:  
-> `python .\vision_processing\run_vision.py --cam1 vision_processing/config/config_cam1.json --cam2 vision_processing/config/config_cam2.json`
+> `python .\vision_processing\run_vision.py --config vision_processing/config/config_cam.json`
 
 ### `Modularizaciones`
 - Tanto `run_simulator` como `run_vision` cuentan con submódulos dentro de la carpeta **core**, los cuales encapsulan funcionalidades específicas. Los nombres de los módulos describen claramente su propósito.

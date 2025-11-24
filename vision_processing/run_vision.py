@@ -10,29 +10,21 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--cam1", required=True, help="Config JSON de la cámara 1"
-    )
-    parser.add_argument(
-        "--cam2", required=True, help="Config JSON de la cámara 2"
+        "--config", required=True, help="Config JSON de la cámara 1"
     )
     args = parser.parse_args()
 
     # --- Cargar configuración de ambas cámaras ---
-    cam1 = load_camera_config(args.cam1)
-    cam2 = load_camera_config(args.cam2)
+    conf = load_camera_config(args.config)
+
+    roi_a = conf["rois_a"]
+    roi_b = conf["rois_b"]
 
     # --- ZeroMQ ---
-    subscriber = VisionSubscriber()
-
-    socket1 = subscriber.add_subscription(cam1["port"])
-    socket2 = subscriber.add_subscription(cam2["port"])
-
-    poller = zmq.Poller()
-    poller.register(socket1, zmq.POLLIN)
-    poller.register(socket2, zmq.POLLIN)
+    subscriber = VisionSubscriber(conf["receive_port"])
     
     # --- Publicador para enviar datos procesados ---
-    publisher = DataPublisher(port=5557)
+    publisher = DataPublisher(conf["send_port"])
 
     # Un solo modelo de visión para ambas cámaras
     vision_cam1 = VisionTrackerBlock(
@@ -56,17 +48,13 @@ def main():
     try:
         while True:
 
-            events = dict(poller.poll(timeout=10))  # no bloquea infinitamente
+            data = subscriber.receive_frame()
 
-            # --- Cámara 1 ---
-            if socket1 in events:
-                data = socket1.recv_pyobj()
-                sem_A, sem_B = process_frame(data, cam1, vision_cam1)
-
-            # --- Cámara 2 ---
-            if socket2 in events:
-                data = socket2.recv_pyobj()
-                sem_C, sem_D = process_frame(data, cam2, vision_cam2)
+            try:
+                sem_A, sem_B = process_frame(data["image1"], roi_a, vision_cam1, "Camera 1")
+                sem_C, sem_D = process_frame(data["image2"], roi_b, vision_cam2, "Camera 2")
+            except:
+                pass
             
             sem_counts = {
                 "A": sem_A,
@@ -75,12 +63,9 @@ def main():
                 "D": sem_D
             }
 
-            #print(f"Conteos de semáforos: {sem_counts}")
-
             timing_output = timing_algorithm.update(sem_counts)
 
             publisher.send_data(timing_output)
-            #publisher.send_data(sem_counts)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
