@@ -3,20 +3,18 @@ import carla
 import queue
 import numpy as np
 import sys
+import time
 
 from core.spawn_utils import spawn_vehicles, spawn_pedestrians, delete_vehicles
-from core.zmq_class import ZMQPublisher, ZMQSubscriber
+from core.zmq_class import SimulatorPublisher, SimulatorSubscriber
 from core.setup_world import SetupWorld
-from core.setup_camera import add_camera
+from core.setup_camera import add_camera, prepare_camera_data
 from core.dynamic_weather import Weather
 from core.traffic_metrics import TrafficMetrics
 from core.traffic_light_utils import TrafficLightManager
 
-def main():
-    # --- Configuración de ZeroMQ ---
-    zmq_publisher_1 = ZMQPublisher(port=5555)
-    zmq_publisher_2 = ZMQPublisher(port=5556)
 
+def main():
     # --- Conexión a CARLA ---
     client = carla.Client('localhost', 2000)
     client.set_timeout(25.0)
@@ -32,9 +30,6 @@ def main():
     # --- Configurar ROI y ocultar objetos lejanos ---
     central_point = carla.Location(x=190.5, y=-239.5, z=0.0)
     SetupWorld.toggle_far_environment_objects(setup.world, central_point, radius=200.0)
-
-    # --- Configurar suscriptor ZeroMQ para recibir datos de visión ---
-    subscriber = ZMQSubscriber(port=5557)
 
     try:
         # --- CONFIGURAR EL MUNDO EN MODO SÍNCRONO ---
@@ -114,11 +109,12 @@ def main():
 
         # --- CONFIGURAR MÉTRICAS DE TRÁFICO ---
         traffic_metrics = TrafficMetrics(world, central_point, roi_radius=62.5, draw_roi=False)
-
-        # carla.World.get_lightmanager().turn_on(lights)
+        
+        # --- CONFIGURAR ZEROMQ ---
+        zmq_simulator = SimulatorPublisher(port=5555)
+        zmq_simulator_sub = SimulatorSubscriber(port=5557)
         
         # --- BUCLE PRINCIPAL MAESTRO ---
-
         while True:
             try:
                 world.tick()
@@ -155,24 +151,16 @@ def main():
                 traffic_metrics.update(current_hour)
 
                 # --- PUBLICAR DATOS A TRAVÉS DE ZEROMQ ---
-                # Enviar imagen de la cámara
-                for (image_queue, zmq_publisher) in [(image_queue_1, zmq_publisher_1),
-                                                            (image_queue_2, zmq_publisher_2)]:
-                    try:
-                        image = image_queue.get(block=False)
-                        array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
-                        array = np.reshape(array, (image.height, image.width, 4))
-                        
-                        zmq_publisher.send_image(image, array)
-                    except queue.Empty:
-                        print("No se recibió imagen de una de las cámaras.")
-                
-                # Recibir datos procesados de visión
-                try:
-                    data = subscriber.reseive()
+                # Enviar imagen de la cámara y recibir estados de semáforos
+                camera_data = prepare_camera_data(image_queue_1, image_queue_2)
+                zmq_simulator.send_frame(camera_data)
 
+                try:
+                    data = zmq_simulator_sub.receive_decision(camera_data)
+                    print("Datos recibidos del sistema de visión.")
                     # Aplicar estados de semáforos
                     if data:
+                        print(f"\nEstados recibidos: {data['states']}")
                         traffic_light_manager.apply_traffic_lights_state(data['states'])
                 except:
                     # No hay datos disponibles en este momento
@@ -187,8 +175,8 @@ def main():
                 actors_to_destroy = [x for x in actor_list if x and x.is_alive]
                 client.apply_batch([carla.command.DestroyActor(x) for x in actors_to_destroy])
             
-            zmq_publisher_1.close()
-            zmq_publisher_2.close()
+            zmq_simulator.close()
+            zmq_simulator_sub.close()
  
 
             print("\nSimulación terminada. Actores eliminados.")
