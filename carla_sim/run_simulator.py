@@ -38,9 +38,9 @@ def main():
         # --- CONFIGURAR EL MUNDO EN MODO SÍNCRONO ---
         settings = world.get_settings()
         settings.synchronous_mode = True
-        #settings.fixed_delta_seconds = 0.05
-        settings.max_substep_delta_time = 0.05     # Asegura estabilidad del paso de física
-        settings.max_substeps = 5
+        #settings.fixed_delta_seconds = 0.03
+        settings.max_substep_delta_time = 0.025     # Asegura estabilidad del paso de física
+        settings.max_substeps = 3
         world.apply_settings(settings)
 
         blueprint_library = world.get_blueprint_library()
@@ -65,7 +65,7 @@ def main():
         # --- GENERAR TRÁFICO ---
         traffic_manager = client.get_trafficmanager(8000)
         traffic_manager.set_synchronous_mode(True)
-        #traffic_manager.set_hybrid_physics_mode(True)
+        traffic_manager.set_random_device_seed(12345)
 
         # Limitar la zana de spawn de vehículos
         spawn_points = world.get_map().get_spawn_points()

@@ -54,7 +54,7 @@ class TrafficMetrics:
                 self.vehicle_flow,
                 avg_speed,
                 self.n_stopped_vehicles,
-                self.t_waiting_vehicles
+                self.t_waiting_vehicles/self.n_stopped_vehicles if self.n_stopped_vehicles > 0 else 0.0
             ])
 
         # Reiniciar métricas

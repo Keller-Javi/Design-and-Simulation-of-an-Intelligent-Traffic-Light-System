@@ -11,7 +11,11 @@ class TimingAlgorithms:
         self.yellow_time = 5
         self.red_time = 2
 
-        self.current_green_time = 20   # Se actualiza con el método elegido
+        self.current_green_time = 20
+        self.fixed_green_time = 25     # Tiempo fijo para el método fijo
+
+        self.min_green_time = 20
+        self.max_green_time = 35
         self.last_change_time = time.time()
 
     def update(self, sem_counts):
@@ -54,8 +58,10 @@ class TimingAlgorithms:
                 # Calcular tiempo de verde según el algoritmo
                 if self.algorithm_type == "method1":
                     self.current_green_time = self.method1(curr_seq, sem_counts)
+                elif self.algorithm_type == "fixed":
+                    self.current_green_time = self.method_fixed()
                 else:
-                    raise NotImplementedError()
+                    raise NotImplementedError(f"Algoritmo {self.algorithm_type} no existe")
 
                 self.current_color = "GREEN"
                 self.last_change_time = now
@@ -97,4 +103,13 @@ class TimingAlgorithms:
         elif curr_seq == "C":
             decision = sem_counts["C"] > sem_counts["D"]
 
-        return 30 if decision else 20
+        return self.max_green_time if decision else self.min_green_time
+
+    # -----------------------------------------------------
+    #               ALGORITMO FIJO
+    # -----------------------------------------------------
+    def method_fixed(self):
+        """
+        Siempre retorna el tiempo fijo configurado.
+        """
+        return self.fixed_green_time

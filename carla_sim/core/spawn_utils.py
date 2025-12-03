@@ -1,5 +1,6 @@
 import carla
 import random
+random.seed(12345)
 
 def spawn_vehicles(world, traffic_manager, blueprint_library, spawn_points, number_of_vehicles, actor_list, min_spawn_distance=10.0):
     """

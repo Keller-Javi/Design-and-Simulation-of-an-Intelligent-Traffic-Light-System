@@ -1,5 +1,4 @@
 import cv2
-import zmq
 import argparse
 from core.inference_class import VisionTrackerBlock
 from core.utils import load_camera_config, process_frame
@@ -42,7 +41,7 @@ def main():
     )
 
     sem_A, sem_B, sem_C, sem_D = 0, 0, 0, 0
-    timing_algorithm = TimingAlgorithms(algorithm_type="method1")
+    timing_algorithm = TimingAlgorithms(algorithm_type="fixed")
 
     print("Iniciando recepción de imágenes... Presione 'q' para salir.")
     try:
