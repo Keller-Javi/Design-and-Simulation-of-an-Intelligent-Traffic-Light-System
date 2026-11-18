@@ -38,9 +38,10 @@ def main():
         # --- CONFIGURAR EL MUNDO EN MODO SÍNCRONO ---
         settings = world.get_settings()
         settings.synchronous_mode = True
-        settings.fixed_delta_seconds = 1#0.1
+        settings.fixed_delta_seconds = 0.2
+        settings.substeping = True
         settings.max_substep_delta_time = 0.025     # Asegura estabilidad del paso de física
-        settings.max_substeps = 3
+        settings.max_substeps = 10
         world.apply_settings(settings)
 
         blueprint_library = world.get_blueprint_library()

@@ -29,28 +29,28 @@ def main():
     # Un solo modelo de visión para ambas cámaras
     vision_cam1 = VisionTrackerBlock(
         confidence_threshold=0.25,
-        max_age=1,
+        max_age=5,
         n_init=5,
         nms_max_overlap=1.0
     )
 
     vision_cam2 = VisionTrackerBlock(
         confidence_threshold=0.25,
-        max_age=1,
+        max_age=5,
         n_init=5,
         nms_max_overlap=1.0
     )
 
     sem_A, sem_B, sem_C, sem_D = 0, 0, 0, 0
     time_i = 0
-    timing_algorithm = TimingAlgorithms(algorithm_type="method_fixed")
+    timing_algorithm = TimingAlgorithms(algorithm_type="fixed")
 
     print("Iniciando recepción de imágenes... Presione 'q' para salir.")
     try:
         while True:
 
             data = subscriber.receive_frame()
-            time_i += 1# 0.1
+            time_i += 0.2
 
             try:
                 if display:
