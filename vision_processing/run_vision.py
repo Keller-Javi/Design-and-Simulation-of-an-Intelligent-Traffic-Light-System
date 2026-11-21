@@ -43,7 +43,7 @@ def main():
 
     sem_A, sem_B, sem_C, sem_D = 0, 0, 0, 0
     time_i = 0
-    timing_algorithm = TimingAlgorithms(algorithm_type="fixed")
+    timing_algorithm = TimingAlgorithms(algorithm_type="fixed_time") # fixed_time, actuated_control, max_pressure
 
     print("Iniciando recepción de imágenes... Presione 'q' para salir.")
     try:
@@ -70,6 +70,14 @@ def main():
             }
 
             timing_output = timing_algorithm.update(sem_counts, time_i)
+            """
+            dic = {
+                "A": "RED",
+                "B": "GREEN",
+                "C": "RED",
+                "D": "RED"
+            }
+            """
 
             publisher.send_data(timing_output)
 
