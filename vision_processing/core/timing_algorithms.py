@@ -1,12 +1,11 @@
-
 class TimingAlgorithms:
     SEQUENCES = ["A", "B", "C", "D"]
 
-    def __init__(self, algorithm_type="fixed_time"):
+    def __init__(self, algorithm_type="method1"):
         self.algorithm_type = algorithm_type
 
-        self.current_index = 0  # Comienza en NS
-        self.current_color = "RED"
+        self.current_index = 1   # Comienza en "A"
+        self.current_color = "RED"   # Fase inicial
 
         self.yellow_time = 5
         self.red_time = 2
@@ -17,17 +16,13 @@ class TimingAlgorithms:
         self.min_green_time = 20
         self.max_green_time = 35
 
+        # Tiempo simulado del último cambio de estado
         self.last_change_time = 0.0
 
     def update(self, sem_counts, sim_time):
         """
         Entrada:
-            sem_counts = {
-                "N": int,
-                "S": int,
-                "E": int,
-                "O": int
-            }
+            sem_counts = {"A": int, "B": int, "C": int, "D": int}
             sim_time = tiempo simulado actual (segundos)
 
         Salida:
@@ -41,47 +36,43 @@ class TimingAlgorithms:
 
         elapsed = sim_time - self.last_change_time
 
-        # -----------------------------------------
+        # -------------------------------------------------
         # 1) Estamos en verde
-        # -----------------------------------------
+        # -------------------------------------------------
         if self.current_color == "GREEN":
             if elapsed >= self.current_green_time:
                 self.current_color = "YELLOW"
                 self.last_change_time = sim_time
 
-        # -----------------------------------------
+        # -------------------------------------------------
         # 2) Estamos en amarillo
-        # -----------------------------------------
+        # -------------------------------------------------
         elif self.current_color == "YELLOW":
             if elapsed >= self.yellow_time:
                 self.current_color = "RED"
                 self.last_change_time = sim_time
 
-        # -----------------------------------------
+        # -------------------------------------------------
         # 3) Estamos en rojo
-        # -----------------------------------------
+        # -------------------------------------------------
         elif self.current_color == "RED":
             if elapsed >= self.red_time:
-
-                # Alternar entre NS y EO
-                self.current_index = (self.current_index + 1) % 2
+                # Cambiar a la siguiente secuencia
+                self.current_index = (self.current_index + 1) % 4
 
                 curr_seq = self.SEQUENCES[self.current_index]
 
-                # Calcular tiempo de verde
+                # Calcular tiempo de verde según el algoritmo
                 if self.algorithm_type == "actuated_control":
                     self.current_green_time = self.method1(
                         curr_seq, sem_counts
                     )
-
                 elif self.algorithm_type == "fixed_time":
                     self.current_green_time = self.method_fixed()
-
                 elif self.algorithm_type == "max_pressure":
                     self.current_green_time = self.method_pressure(
                         curr_seq, sem_counts
                     )
-
                 else:
                     raise NotImplementedError(
                         f"Algoritmo {self.algorithm_type} no existe"
@@ -90,20 +81,18 @@ class TimingAlgorithms:
                 self.current_color = "GREEN"
                 self.last_change_time = sim_time
 
-        # -----------------------------------------
-        # Construir estado de salida
-        # -----------------------------------------
+        # -------------------------------------------------
+        # Construir el estado a devolver
+        # -------------------------------------------------
         curr_seq = self.SEQUENCES[self.current_index]
 
         return {
-            "states": self._build_state(
-                curr_seq, self.current_color
-            )
+            "states": self._build_state(curr_seq, self.current_color)
         }
 
-    # -----------------------------------------
-    # Construir estado de los semáforos
-    # -----------------------------------------
+    # -----------------------------------------------------
+    # Construir el estado dict
+    # -----------------------------------------------------
     def _build_state(self, active_seq, color):
         state_dict = {}
 
@@ -113,15 +102,14 @@ class TimingAlgorithms:
             else:
                 state_dict[seq] = "RED"
 
+        return state_dict
+
     # -----------------------------------------
-    # ALGORITMO 1: DEMANDA POR FASE
+    #               ALGORITMO 1
     # -----------------------------------------
     def method1(self, curr_seq, sem_counts):
         """
-        Compara la cantidad total de vehículos
-        de la fase actual contra la fase opuesta.
-
-        Devuelve min_green_time o max_green_time.
+        Devuelve 20s o 35s de verde según la comparación.
         """
 
         if curr_seq == "D":
@@ -135,22 +123,20 @@ class TimingAlgorithms:
 
         return self.max_green_time if decision else self.min_green_time
 
-    # -----------------------------------------
-    # ALGORITMO FIJO
-    # -----------------------------------------
+    # -----------------------------------------------------
+    #               ALGORITMO FIJO
+    # -----------------------------------------------------
     def method_fixed(self):
         """Siempre retorna el tiempo fijo configurado."""
         return self.fixed_green_time
 
-    # -----------------------------------------
-    # ALGORITMO PRESSURE
-    # -----------------------------------------
+    # -----------------------------------------------------
+    #               Pressure-Based Algorithm
+    # -----------------------------------------------------
     def method_pressure(self, curr_seq, sem_counts):
         """
-        Variante simplificada basada en la diferencia
-        de demanda entre las dos fases.
-
-        No considera vehículos de salida.
+        Max-Pressure: el tiempo verde depende de la diferencia
+        con el siguiente semáforo en el ciclo.
         """
 
         next_seq = self.SEQUENCES[
@@ -166,7 +152,6 @@ class TimingAlgorithms:
             return min_g
 
         p_norm = min(pressure / 4, 1.0)
-
         green = min_g + p_norm * (max_g - min_g)
 
         return int(green)
