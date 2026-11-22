@@ -11,9 +11,9 @@ class Sun(object):
         self._t = 0.0
 
     def tick(self, delta_seconds):
-        self._t += 0.008 * delta_seconds
+        self._t += 0.008 * delta_seconds * 1.5
         self._t %= 2.0 * math.pi
-        self.azimuth += 0.25 * delta_seconds
+        self.azimuth += 0.25 * delta_seconds * 1.5
         self.azimuth %= 360.0
         self.altitude = (70 * math.sin(self._t)) - 20
 
@@ -74,5 +74,5 @@ class Weather(object):
     
     def current_hour(self):
         # Desfase para que 0 altitud = 6:00 am
-        hour = ((self._sun._t + math.pi / 2) % (2 * math.pi)) / (2 * math.pi) * 24.0
+        hour = ((self._sun._t + math.pi / 2) % (2 * math.pi)) / (2 * math.pi) * 12.0
         return hour

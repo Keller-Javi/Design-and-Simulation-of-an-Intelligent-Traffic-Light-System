@@ -134,9 +134,9 @@ def main():
                 current_hour = weather.current_hour()
                 
                 # Determinar cantidad de vehículos según hora
-                if 7 <= current_hour < 9 or 11 <= current_hour < 13 or 16 <= current_hour < 18:
+                if 3.5 <= current_hour < 4.5 or 5.5 <= current_hour < 6.5 or 8 <= current_hour < 9:
                     number_of_vehicles = 65  # Tránsito alto
-                elif 6 <= current_hour < 22:
+                elif 3 <= current_hour < 11:
                     number_of_vehicles = 30  # Tránsito moderado
                 else:
                     number_of_vehicles = 10  # Tránsito bajo

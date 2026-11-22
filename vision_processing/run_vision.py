@@ -50,7 +50,7 @@ def main():
         while True:
 
             data = subscriber.receive_frame()
-            time_i += 0.2
+            time_i += 0.12
 
             try:
                 if display:

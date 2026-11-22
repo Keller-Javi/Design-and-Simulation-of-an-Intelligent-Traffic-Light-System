@@ -72,7 +72,7 @@ class TrafficMetrics:
         if current_hour >= self.last_save_time + 1.0:
             self.save_to_csv()
             self.last_save_time = current_hour
-        elif current_hour < 1.0 and self.last_save_time >= 23.0:
+        elif current_hour < 1.0 and self.last_save_time >= 11.0:
             self.save_to_csv()
             self.last_save_time = current_hour
 

@@ -1,8 +1,8 @@
 
 class TimingAlgorithms:
-    SEQUENCES = ["NS", "EO"]
+    SEQUENCES = ["A", "B", "C", "D"]
 
-    def __init__(self, algorithm_type="method1"):
+    def __init__(self, algorithm_type="fixed_time"):
         self.algorithm_type = algorithm_type
 
         self.current_index = 0  # Comienza en NS
@@ -32,8 +32,10 @@ class TimingAlgorithms:
 
         Salida:
             state_dict = {
-                "NS": "GREEN",
-                "EO": "RED"
+                "A": "GREEN",
+                "B": "RED",
+                "C": "RED",
+                "D": "RED"
             }
         """
 
@@ -103,22 +105,13 @@ class TimingAlgorithms:
     # Construir estado de los semáforos
     # -----------------------------------------
     def _build_state(self, active_seq, color):
+        state_dict = {}
 
-        if active_seq == "NS":
-            return {
-                "A": color,
-                "B": "RED",
-                "C": color,
-                "D": "RED"
-            }
-
-        else:  # EO
-            return {
-                "A": "RED",
-                "B": color,
-                "C": "RED",
-                "D": color
-            }
+        for seq in self.SEQUENCES:
+            if seq == active_seq:
+                state_dict[seq] = color
+            else:
+                state_dict[seq] = "RED"
 
     # -----------------------------------------
     # ALGORITMO 1: DEMANDA POR FASE
@@ -131,19 +124,16 @@ class TimingAlgorithms:
         Devuelve min_green_time o max_green_time.
         """
 
-        NS = sem_counts["N"] + sem_counts["S"]
-        EO = sem_counts["E"] + sem_counts["O"]
+        if curr_seq == "D":
+            decision = sem_counts["D"] > sem_counts["A"]
+        elif curr_seq == "A":
+            decision = sem_counts["A"] > sem_counts["B"]
+        elif curr_seq == "B":
+            decision = sem_counts["B"] > sem_counts["C"]
+        elif curr_seq == "C":
+            decision = sem_counts["C"] > sem_counts["D"]
 
-        if curr_seq == "NS":
-            decision = NS > EO
-        else:
-            decision = EO > NS
-
-        return (
-            self.max_green_time
-            if decision
-            else self.min_green_time
-        )
+        return self.max_green_time if decision else self.min_green_time
 
     # -----------------------------------------
     # ALGORITMO FIJO
@@ -163,13 +153,11 @@ class TimingAlgorithms:
         No considera vehículos de salida.
         """
 
-        NS = sem_counts["N"] + sem_counts["S"]
-        EO = sem_counts["E"] + sem_counts["O"]
+        next_seq = self.SEQUENCES[
+            (self.SEQUENCES.index(curr_seq) + 1) % 4
+        ]
 
-        if curr_seq == "NS":
-            pressure = NS - EO
-        else:
-            pressure = EO - NS
+        pressure = sem_counts[curr_seq] - sem_counts[next_seq]
 
         min_g = 15
         max_g = 45
